@@ -1,0 +1,76 @@
+"""
+Orion Celery Application Configuration (REFACTORED)
+
+This is the refactored version using shared.celery.create_celery_app
+to eliminate code duplication.
+
+To use: Rename to celery_app.py after migrating
+"""
+import logging
+from celery.schedules import crontab
+from shared.celery import create_celery_app
+from ..config import settings
+
+logger = logging.getLogger(__name__)
+
+# Create Celery application using shared factory
+celery_app = create_celery_app(
+    app_name="orion",
+    broker_url=settings.CELERY_BROKER_URL,
+    result_backend=settings.CELERY_RESULT_BACKEND,
+    include=["app.scheduler.tasks"],
+    # Service-specific overrides
+    task_time_limit=3600,  # 1 hour for ML tasks
+    task_soft_time_limit=3000,  # 50 minutes soft limit
+    worker_max_tasks_per_child=1000
+)
+
+# Scheduled tasks (Celery Beat)
+celery_app.conf.beat_schedule = {
+    # Daily forecast generation at 2 AM UTC
+    "generate-daily-forecasts": {
+        "task": "app.scheduler.tasks.generate_all_forecasts",
+        "schedule": crontab(hour=2, minute=0),  # 2:00 AM UTC daily
+        "options": {
+            "expires": 3600,  # Task expires if not picked up in 1 hour
+        }
+    },
+
+    # Update forecast actuals at 1 AM UTC (after daily sales data is loaded)
+    "update-forecast-actuals": {
+        "task": "app.scheduler.tasks.update_all_forecast_actuals",
+        "schedule": crontab(hour=1, minute=0),  # 1:00 AM UTC daily
+        "options": {
+            "expires": 3600,
+        }
+    },
+
+    # Generate insights every 6 hours
+    "generate-insights": {
+        "task": "app.scheduler.tasks.generate_all_insights",
+        "schedule": crontab(hour="*/6", minute=0),  # Every 6 hours
+        "options": {
+            "expires": 3600,
+        }
+    },
+
+    # Weekly accuracy report on Mondays at 8 AM UTC
+    "weekly-accuracy-report": {
+        "task": "app.scheduler.tasks.generate_weekly_accuracy_report",
+        "schedule": crontab(day_of_week=1, hour=8, minute=0),  # Monday 8:00 AM UTC
+        "options": {
+            "expires": 7200,
+        }
+    },
+
+    # Cleanup old forecasts monthly (first day of month at 3 AM UTC)
+    "cleanup-old-forecasts": {
+        "task": "app.scheduler.tasks.cleanup_old_data",
+        "schedule": crontab(day_of_month=1, hour=3, minute=0),  # 1st of month, 3:00 AM UTC
+        "options": {
+            "expires": 7200,
+        }
+    },
+}
+
+logger.info("Orion Celery app configured with beat schedule")

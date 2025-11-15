@@ -1,0 +1,12 @@
+# Shared library dependencies for Shabou Auto Pièces backend
+# Used by both Orion and Prospector Python agents
+
+# Core dependencies
+sqlalchemy==2.0.23
+pydantic==2.5.0
+pydantic-settings==2.1.0
+redis==5.0.1
+celery==5.3.4
+
+# Optional dependencies for specific features
+# (agents should install these in their own requirements.txt)

@@ -1,0 +1,86 @@
+"""
+Prospector Celery Application Configuration (REFACTORED)
+
+This is the refactored version using shared.celery.create_celery_app
+to eliminate code duplication.
+
+To use: Rename to celery_app.py after migrating
+"""
+import logging
+from celery.schedules import crontab
+from shared.celery import create_celery_app
+from ..config import settings
+
+logger = logging.getLogger(__name__)
+
+# Create Celery application using shared factory
+celery_app = create_celery_app(
+    app_name="prospector",
+    broker_url=settings.CELERY_BROKER_URL,
+    result_backend=settings.CELERY_RESULT_BACKEND,
+    include=["app.scheduler.tasks"],
+    # Service-specific overrides
+    task_time_limit=1800,  # 30 minute hard limit for scraping
+    task_soft_time_limit=1500,  # 25 minute soft limit
+    worker_max_tasks_per_child=50  # Lower for memory leak prevention
+)
+
+# Periodic task schedule
+celery_app.conf.beat_schedule = {
+    # Daily Google Places scraping (runs at 2 AM UTC)
+    # NOTE: Modified to run monthly to save costs
+    "monthly-google-places-scrape": {
+        "task": "app.scheduler.tasks.monthly_google_places_scrape",
+        "schedule": crontab(day_of_month=1, hour=2, minute=0),  # 1st of month, 2 AM
+        "options": {
+            "expires": 7200,  # Expire after 2 hours if not executed
+        },
+    },
+
+    # Scrape websites for leads (runs every 6 hours)
+    "scrape-lead-websites": {
+        "task": "app.scheduler.tasks.scrape_lead_websites",
+        "schedule": crontab(hour="*/6", minute=0),
+        "options": {
+            "expires": 3600,
+        },
+    },
+
+    # Batch update lead scores (runs every 4 hours)
+    "batch-update-lead-scores": {
+        "task": "app.scheduler.tasks.batch_update_lead_scores",
+        "schedule": crontab(hour="*/4", minute=30),
+        "options": {
+            "expires": 3600,
+        },
+    },
+
+    # Cleanup old data (runs daily at 3 AM UTC)
+    "cleanup-old-data": {
+        "task": "app.scheduler.tasks.cleanup_old_data",
+        "schedule": crontab(hour=3, minute=0),
+        "options": {
+            "expires": 7200,
+        },
+    },
+
+    # Send weekly report (runs every Monday at 9 AM UTC)
+    "send-weekly-report": {
+        "task": "app.scheduler.tasks.send_weekly_report",
+        "schedule": crontab(hour=9, minute=0, day_of_week=1),  # Monday = 1
+        "options": {
+            "expires": 3600,
+        },
+    },
+}
+
+# Task routes (can route specific tasks to specific queues)
+celery_app.conf.task_routes = {
+    "app.scheduler.tasks.monthly_google_places_scrape": {"queue": "scraping"},
+    "app.scheduler.tasks.scrape_lead_websites": {"queue": "scraping"},
+    "app.scheduler.tasks.batch_update_lead_scores": {"queue": "processing"},
+    "app.scheduler.tasks.cleanup_old_data": {"queue": "maintenance"},
+    "app.scheduler.tasks.send_weekly_report": {"queue": "processing"},
+}
+
+logger.info("Prospector Celery app configured successfully")

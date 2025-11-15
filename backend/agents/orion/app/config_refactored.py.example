@@ -1,0 +1,59 @@
+"""
+Orion Agent Configuration (REFACTORED)
+
+This is the refactored version using shared.config.BaseSettings
+to eliminate code duplication.
+
+To use: Rename to config.py after migrating
+"""
+import os
+from typing import Optional
+from shared.config import BaseSettings
+
+
+class Settings(BaseSettings):
+    """
+    Orion Agent settings extending shared base configuration.
+
+    Only Orion-specific settings are defined here.
+    Common settings (DATABASE_URL, REDIS, CELERY, etc.) are inherited.
+    """
+
+    # App info
+    APP_NAME: str = "Orion Agent"
+    VERSION: str = "1.0.0"
+
+    # Override default port
+    PORT: int = int(os.getenv("PORT", "8002"))
+
+    # Forecasting settings
+    MIN_HISTORY_DAYS: int = 365  # Minimum 1 year of data
+    FORECAST_HORIZON_DAYS: int = 30  # Default forecast horizon
+    CONFIDENCE_LEVEL: float = 0.95  # 95% confidence intervals
+    MODEL_RETRAIN_DAYS: int = 7  # Retrain models weekly
+
+    # Model hyperparameters
+    SARIMA_ORDER: tuple = (1, 1, 1)  # (p, d, q)
+    SARIMA_SEASONAL_ORDER: tuple = (1, 1, 1, 12)  # (P, D, Q, s)
+    PROPHET_CHANGEPOINT_PRIOR_SCALE: float = 0.05
+    PROPHET_SEASONALITY_PRIOR_SCALE: float = 10.0
+
+    # Weather API (optional for external features)
+    WEATHER_API_KEY: Optional[str] = os.getenv("WEATHER_API_KEY")
+    WEATHER_API_URL: str = "https://api.openweathermap.org/data/2.5"
+
+    # Email settings (specific recipients)
+    FROM_EMAIL: str = os.getenv("FROM_EMAIL", "orion@shabou-autopieces.tn")
+    FROM_NAME: str = os.getenv("FROM_NAME", "Orion Agent")
+    ALERT_RECIPIENTS: str = os.getenv(
+        "ALERT_RECIPIENTS",
+        "inventory@shabou-autopieces.tn"
+    )  # Comma-separated email addresses
+
+    # Cost protection
+    ENABLE_COST_PROTECTION: bool = os.getenv("ENABLE_COST_PROTECTION", "true").lower() == "true"
+    MAX_FORECASTS_PER_DAY: int = int(os.getenv("MAX_FORECASTS_PER_DAY", "1000"))
+
+
+# Global settings instance
+settings = Settings()
