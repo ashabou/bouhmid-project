@@ -17,28 +17,25 @@ export async function authRoutes(fastify: FastifyInstance) {
    * POST /api/v1/admin/auth/login
    * Authenticate user with email and password
    */
-  fastify.post('/api/v1/admin/auth/login', authController.login);
+  fastify.post('/admin/auth/login', authController.login);
 
   /**
    * POST /api/v1/admin/auth/refresh
    * Refresh access token using refresh token
    */
-  fastify.post('/api/v1/admin/auth/refresh', authController.refresh);
+  fastify.post('/admin/auth/refresh', authController.refresh);
 
   /**
    * POST /api/v1/admin/auth/password-reset/initiate
    * Initiate password reset flow
    */
-  fastify.post(
-    '/api/v1/admin/auth/password-reset/initiate',
-    authController.initiatePasswordReset
-  );
+  fastify.post('/admin/auth/password-reset/initiate', authController.initiatePasswordReset);
 
   /**
    * POST /api/v1/admin/auth/password-reset/complete
    * Complete password reset using reset token
    */
-  fastify.post('/api/v1/admin/auth/password-reset/complete', authController.resetPassword);
+  fastify.post('/admin/auth/password-reset/complete', authController.resetPassword);
 
   // Protected routes (authentication required)
 
@@ -46,7 +43,7 @@ export async function authRoutes(fastify: FastifyInstance) {
    * POST /api/v1/admin/auth/logout
    * Logout user by revoking refresh token
    */
-  fastify.post('/api/v1/admin/auth/logout', {
+  fastify.post('/admin/auth/logout', {
     preHandler: [requireAuth],
     handler: authController.logout,
   });
@@ -55,7 +52,7 @@ export async function authRoutes(fastify: FastifyInstance) {
    * POST /api/v1/admin/auth/change-password
    * Change user password
    */
-  fastify.post('/api/v1/admin/auth/change-password', {
+  fastify.post('/admin/auth/change-password', {
     preHandler: [requireAuth],
     handler: authController.changePassword,
   });
@@ -64,7 +61,7 @@ export async function authRoutes(fastify: FastifyInstance) {
    * GET /api/v1/admin/auth/me
    * Get current authenticated user info
    */
-  fastify.get('/api/v1/admin/auth/me', {
+  fastify.get('/admin/auth/me', {
     preHandler: [requireAuth],
     handler: authController.getCurrentUser,
   });
