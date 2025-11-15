@@ -239,3 +239,76 @@ async def delete_lead(lead_id: str, db: Session = Depends(get_db)):
         logger.error(f"Error deleting lead {lead_id}: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{lead_id}/update-score")
+async def update_lead_score(lead_id: str, db: Session = Depends(get_db)):
+    """
+    Update a lead's potential score
+
+    Recalculates the score based on all available data
+
+    Args:
+        lead_id: Lead UUID
+        db: Database session
+
+    Returns:
+        Updated lead with new score
+    """
+    try:
+        from ..utils.scoring import LeadScorer
+
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        scorer = LeadScorer()
+        new_score = scorer.update_lead_score(lead, db)
+
+        logger.info(f"Updated score for lead {lead_id}: {new_score}")
+
+        return {
+            "success": True,
+            "lead_id": str(lead.id),
+            "new_score": new_score,
+            "message": f"Score updated to {new_score}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating lead score {lead_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/batch-update-scores")
+async def batch_update_scores(
+    limit: Optional[int] = Query(None, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    """
+    Update scores for multiple leads
+
+    Args:
+        limit: Optional limit on number of leads to update (max 1000)
+        db: Database session
+
+    Returns:
+        Summary of updates
+    """
+    try:
+        from ..utils.scoring import LeadScorer
+
+        scorer = LeadScorer()
+        result = scorer.batch_update_scores(db, limit)
+
+        logger.info(f"Batch score update completed: {result}")
+
+        return {
+            "success": True,
+            **result
+        }
+
+    except Exception as e:
+        logger.error(f"Error in batch score update: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

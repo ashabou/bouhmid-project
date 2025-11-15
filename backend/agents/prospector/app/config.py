@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # Redis (for caching and task queues)
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/1")
 
+    # Celery
+    CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+
     # Google Places API
     GOOGLE_PLACES_API_KEY: Optional[str] = os.getenv("GOOGLE_PLACES_API_KEY")
 
