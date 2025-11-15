@@ -84,11 +84,8 @@ async def root():
 
 
 # Import and register routes
-# from .routes import forecasts, insights, sales_history, import_data
-# app.include_router(forecasts.router)
-# app.include_router(insights.router)
-# app.include_router(sales_history.router)
-# app.include_router(import_data.router)
+from .routes import sales_history
+app.include_router(sales_history.router)
 
 
 if __name__ == "__main__":
