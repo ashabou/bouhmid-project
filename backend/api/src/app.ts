@@ -15,6 +15,8 @@ import { logger } from './shared/logger/winston.config.js';
 // Import routes
 import { productRoutes } from './modules/products/product.routes.js';
 import { brandRoutes } from './modules/brands/brand.routes.js';
+import { categoryRoutes } from './modules/categories/category.routes.js';
+import { searchRoutes } from './modules/search/search.routes.js';
 
 /**
  * Create and configure Fastify application
@@ -120,6 +122,8 @@ export async function createApp() {
   // Register routes
   await app.register(productRoutes, { prefix: appConfig.api.prefix });
   await app.register(brandRoutes, { prefix: appConfig.api.prefix });
+  await app.register(categoryRoutes, { prefix: appConfig.api.prefix });
+  await app.register(searchRoutes, { prefix: appConfig.api.prefix });
 
   return app;
 }
