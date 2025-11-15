@@ -82,6 +82,18 @@ async def health_check():
     }
 
 
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    from fastapi.responses import Response
+    from .metrics import get_metrics, get_content_type
+
+    return Response(
+        content=get_metrics(),
+        media_type=get_content_type()
+    )
+
+
 @app.get("/")
 async def root():
     """Root endpoint"""
