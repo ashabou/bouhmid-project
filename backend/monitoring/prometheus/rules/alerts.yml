@@ -1,0 +1,141 @@
+# Prometheus Alert Rules
+# Defines conditions for triggering alerts
+
+groups:
+  # ========================================
+  # Service Availability Alerts
+  # ========================================
+  - name: service_availability
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: APIHighErrorRate
+        expr: rate(shabou_api_http_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on API"
+          description: "API error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+  # ========================================
+  # Performance Alerts
+  # ========================================
+  - name: performance
+    interval: 30s
+    rules:
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(shabou_api_http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is {{ $value }}s (threshold: 1s)"
+
+      - alert: CacheLowHitRatio
+        expr: shabou_api_cache_hit_ratio < 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low cache hit ratio"
+          description: "Cache hit ratio is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+  # ========================================
+  # Database Alerts
+  # ========================================
+  - name: database
+    interval: 30s
+    rules:
+      - alert: HighDatabaseConnections
+        expr: shabou_api_db_connections_active > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of database connections"
+          description: "Active database connections: {{ $value }} (threshold: 80)"
+
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, rate(shabou_api_db_query_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time is {{ $value }}s (threshold: 2s)"
+
+  # ========================================
+  # Resource Alerts
+  # ========================================
+  - name: resources
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 90%)"
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% (threshold: 80%)"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Available disk space is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+  # ========================================
+  # Business Logic Alerts
+  # ========================================
+  - name: business_logic
+    interval: 1m
+    rules:
+      - alert: HighScrapingFailureRate
+        expr: rate(prospector_scraping_errors_total[10m]) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High scraping failure rate"
+          description: "Scraping failure rate is {{ $value | humanizePercentage }} (threshold: 20%)"
+
+      - alert: LowForecastAccuracy
+        expr: orion_forecast_accuracy > 40
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low forecast accuracy"
+          description: "Forecast MAPE is {{ $value }}% (threshold: 40%)"
+
+      - alert: NoLeadsGenerated
+        expr: increase(prospector_leads_discovered_total[24h]) == 0
+        for: 24h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No leads generated in 24 hours"
+          description: "Prospector has not discovered any leads in the last 24 hours"

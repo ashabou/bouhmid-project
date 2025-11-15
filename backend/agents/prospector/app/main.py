@@ -94,6 +94,18 @@ async def health():
     }
 
 
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    from fastapi.responses import Response
+    from .metrics import get_metrics, get_content_type
+
+    return Response(
+        content=get_metrics(),
+        media_type=get_content_type()
+    )
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "app.main:app",

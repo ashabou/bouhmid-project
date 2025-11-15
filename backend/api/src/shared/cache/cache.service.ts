@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { redis } from './redis.client.js';
 import { logger } from '../logger/winston.config.js';
+import { recordCacheHit, recordCacheMiss } from '../metrics/prometheus.js';
 
 /**
  * Cache Service
@@ -26,6 +27,7 @@ export class CacheService {
       const memCached = this.memoryCache.get(key);
       if (memCached && memCached.expiresAt > Date.now()) {
         logger.debug('Cache hit (memory)', { key });
+        recordCacheHit();
         return memCached.data as T;
       }
 
@@ -33,6 +35,7 @@ export class CacheService {
       const redisCached = await redis.get(key);
       if (redisCached) {
         logger.debug('Cache hit (Redis)', { key });
+        recordCacheHit();
         const parsed = JSON.parse(redisCached) as T;
 
         // Store in memory cache if small enough
@@ -48,6 +51,7 @@ export class CacheService {
       }
 
       logger.debug('Cache miss', { key });
+      recordCacheMiss();
       return null;
     } catch (error) {
       logger.error('Cache get error', { key, error });
