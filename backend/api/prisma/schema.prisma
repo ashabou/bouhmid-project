@@ -1,0 +1,391 @@
+// Prisma schema for Shabou Auto Pièces
+// Database: PostgreSQL 15+
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+  OUT_OF_STOCK
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  REJECTED
+}
+
+enum LeadSource {
+  GOOGLE_MAPS
+  SUPPLIER_WEBSITE
+  MARKETPLACE
+  MANUAL
+}
+
+// ============================================
+// CORE E-COMMERCE TABLES
+// ============================================
+
+model User {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email          String    @unique @db.VarChar(255)
+  passwordHash   String    @map("password_hash") @db.VarChar(255)
+  fullName       String    @map("full_name") @db.VarChar(255)
+  role           UserRole  @default(ADMIN)
+  isActive       Boolean   @default(true) @map("is_active")
+  lastLoginAt    DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  priceChanges   PriceHistory[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Brand {
+  id              Int       @id @default(autoincrement())
+  name            String    @unique @db.VarChar(255)
+  slug            String    @unique @db.VarChar(255)
+  logoUrl         String?   @map("logo_url") @db.VarChar(500)
+  description     String?   @db.Text
+  countryOfOrigin String?   @map("country_of_origin") @db.VarChar(100)
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  products        Product[]
+  salesHistory    SalesHistory[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@map("brands")
+}
+
+model Category {
+  id          Int        @id @default(autoincrement())
+  parentId    Int?       @map("parent_id")
+  name        String     @db.VarChar(255)
+  slug        String     @unique @db.VarChar(255)
+  description String?    @db.Text
+  imageUrl    String?    @map("image_url") @db.VarChar(500)
+  level       Int        @default(0)
+  sortOrder   Int        @default(0) @map("sort_order")
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryHierarchy")
+  products    Product[]
+  salesHistory SalesHistory[]
+  forecastInsights ForecastInsight[]
+
+  @@index([parentId])
+  @@index([slug])
+  @@index([isActive])
+  @@index([level])
+  @@map("categories")
+}
+
+model Product {
+  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sku                 String         @unique @db.VarChar(100)
+  name                String         @db.VarChar(500)
+  slug                String         @unique @db.VarChar(500)
+
+  // Relationships
+  brandId             Int?           @map("brand_id")
+  categoryId          Int            @map("category_id")
+
+  // Details
+  description         String?        @db.Text
+  specifications      Json?          @db.JsonB
+
+  // Pricing
+  currentPrice        Decimal        @map("current_price") @db.Decimal(10, 2)
+  originalPrice       Decimal?       @map("original_price") @db.Decimal(10, 2)
+  currency            String         @default("TND") @db.VarChar(3)
+
+  // Inventory
+  inStock             Boolean        @default(true) @map("in_stock")
+  stockQuantity       Int            @default(0) @map("stock_quantity")
+
+  // Media
+  images              Json?          @db.JsonB
+  primaryImageUrl     String?        @map("primary_image_url") @db.VarChar(500)
+
+  // SEO
+  metaTitle           String?        @map("meta_title") @db.VarChar(255)
+  metaDescription     String?        @map("meta_description") @db.VarChar(500)
+
+  // Status
+  status              ProductStatus  @default(ACTIVE)
+
+  // Auto Parts Specific
+  compatibleVehicles  Json?          @map("compatible_vehicles") @db.JsonB
+  partNumber          String?        @map("part_number") @db.VarChar(100)
+
+  // Metrics
+  viewCount           Int            @default(0) @map("view_count")
+  orderCount          Int            @default(0) @map("order_count")
+
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  brand               Brand?         @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  category            Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  priceHistory        PriceHistory[]
+  forecasts           Forecast[]
+  forecastInsights    ForecastInsight[]
+
+  @@index([brandId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([currentPrice])
+  @@index([createdAt(sort: Desc)])
+  @@index([sku])
+  @@map("products")
+}
+
+model PriceHistory {
+  id         Int      @id @default(autoincrement())
+  productId  String   @map("product_id") @db.Uuid
+  oldPrice   Decimal? @map("old_price") @db.Decimal(10, 2)
+  newPrice   Decimal  @map("new_price") @db.Decimal(10, 2)
+  changedBy  String?  @map("changed_by") @db.Uuid
+  reason     String?  @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [changedBy], references: [id])
+
+  @@index([productId, createdAt(sort: Desc)])
+  @@map("price_history")
+}
+
+// ============================================
+// PROSPECTOR AGENT TABLES
+// ============================================
+
+model Lead {
+  id                        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Source
+  source                    LeadSource
+  sourceUrl                 String?      @map("source_url") @db.VarChar(1000)
+
+  // Business Info
+  businessName              String       @map("business_name") @db.VarChar(500)
+  contactName               String?      @map("contact_name") @db.VarChar(255)
+  phone                     String?      @db.VarChar(50)
+  email                     String?      @db.VarChar(255)
+  address                   String?      @db.Text
+  city                      String?      @db.VarChar(100)
+  country                   String       @default("Tunisia") @db.VarChar(100)
+
+  // Categorization
+  leadType                  String?      @map("lead_type") @db.VarChar(50)
+
+  // Scraped Data
+  productsFound             Json?        @map("products_found") @db.JsonB
+  priceCompetitivenessScore Decimal?     @map("price_competitiveness_score") @db.Decimal(3, 2)
+  websiteUrl                String?      @map("website_url") @db.VarChar(500)
+  hasWebsite                Boolean      @default(false) @map("has_website")
+
+  // Scoring
+  potentialScore            Int?         @map("potential_score")
+  notes                     String?      @db.Text
+
+  // Status
+  status                    LeadStatus   @default(NEW)
+  contactedAt               DateTime?    @map("contacted_at") @db.Timestamptz
+  qualifiedAt               DateTime?    @map("qualified_at") @db.Timestamptz
+
+  // Metadata
+  scrapedAt                 DateTime     @default(now()) @map("scraped_at") @db.Timestamptz
+  lastUpdatedAt             DateTime     @updatedAt @map("last_updated_at") @db.Timestamptz
+  createdAt                 DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  leadProducts              LeadProduct[]
+
+  @@index([status])
+  @@index([source])
+  @@index([potentialScore(sort: Desc)])
+  @@index([scrapedAt(sort: Desc)])
+  @@index([city])
+  @@map("leads")
+}
+
+model LeadProduct {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId            String   @map("lead_id") @db.Uuid
+
+  // Product Info
+  name              String   @db.VarChar(500)
+  price             Decimal? @db.Decimal(10, 2)
+  currency          String   @default("TND") @db.VarChar(3)
+  partNumber        String?  @map("part_number") @db.VarChar(100)
+  brand             String?  @db.VarChar(255)
+
+  // Matching
+  matchedProductId  String?  @map("matched_product_id") @db.Uuid
+  priceDifference   Decimal? @map("price_difference") @db.Decimal(10, 2)
+
+  scrapedAt         DateTime @default(now()) @map("scraped_at") @db.Timestamptz
+
+  // Relations
+  lead              Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([matchedProductId])
+  @@map("lead_products")
+}
+
+// ============================================
+// ORION AGENT TABLES (Forecasting)
+// ============================================
+
+model SalesHistory {
+  id            Int      @id @default(autoincrement())
+
+  // Transaction
+  saleDate      DateTime @map("sale_date") @db.Date
+  productId     String?  @map("product_id") @db.Uuid
+  sku           String?  @db.VarChar(100)
+  productName   String?  @map("product_name") @db.VarChar(500)
+
+  // Quantity & Revenue
+  quantitySold  Int      @map("quantity_sold")
+  unitPrice     Decimal  @map("unit_price") @db.Decimal(10, 2)
+  totalRevenue  Decimal  @map("total_revenue") @db.Decimal(10, 2)
+
+  // Context
+  brandId       Int?     @map("brand_id")
+  categoryId    Int?     @map("category_id")
+  customerType  String?  @map("customer_type") @db.VarChar(50)
+
+  // Metadata
+  importedFrom  String   @default("csv") @map("imported_from") @db.VarChar(50)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  brand         Brand?   @relation(fields: [brandId], references: [id])
+  category      Category? @relation(fields: [categoryId], references: [id])
+
+  @@index([saleDate(sort: Desc)])
+  @@index([productId])
+  @@index([sku])
+  @@index([categoryId])
+  @@index([brandId])
+  @@map("sales_history")
+}
+
+model Forecast {
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Target
+  productId                String   @map("product_id") @db.Uuid
+  sku                      String   @db.VarChar(100)
+
+  // Forecast Period
+  forecastDate             DateTime @map("forecast_date") @db.Date
+  forecastHorizon          String?  @map("forecast_horizon") @db.VarChar(20)
+
+  // Predictions
+  predictedQuantity        Decimal  @map("predicted_quantity") @db.Decimal(10, 2)
+  confidenceIntervalLower  Decimal? @map("confidence_interval_lower") @db.Decimal(10, 2)
+  confidenceIntervalUpper  Decimal? @map("confidence_interval_upper") @db.Decimal(10, 2)
+  confidenceScore          Decimal? @map("confidence_score") @db.Decimal(3, 2)
+
+  // Model Info
+  modelName                String?  @map("model_name") @db.VarChar(100)
+  modelVersion             String?  @map("model_version") @db.VarChar(50)
+  featuresUsed             Json?    @map("features_used") @db.JsonB
+
+  // Actual (for evaluation)
+  actualQuantity           Decimal? @map("actual_quantity") @db.Decimal(10, 2)
+  error                    Decimal? @db.Decimal(10, 2)
+
+  // Metadata
+  generatedAt              DateTime @default(now()) @map("generated_at") @db.Timestamptz
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  product                  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, forecastDate, forecastHorizon])
+  @@index([productId])
+  @@index([forecastDate(sort: Desc)])
+  @@index([generatedAt(sort: Desc)])
+  @@map("forecasts")
+}
+
+model ForecastInsight {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Type
+  insightType    String    @map("insight_type") @db.VarChar(50)
+  severity       String    @db.VarChar(20)
+
+  // Target
+  productId      String?   @map("product_id") @db.Uuid
+  categoryId     Int?      @map("category_id")
+
+  // Content
+  title          String    @db.VarChar(255)
+  description    String    @db.Text
+  recommendation String?   @db.Text
+
+  // Data
+  data           Json?     @db.JsonB
+
+  // Status
+  isRead         Boolean   @default(false) @map("is_read")
+  isActioned     Boolean   @default(false) @map("is_actioned")
+  actionedAt     DateTime? @map("actioned_at") @db.Timestamptz
+
+  // Validity
+  validFrom      DateTime  @map("valid_from") @db.Date
+  validUntil     DateTime  @map("valid_until") @db.Date
+
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  product        Product?  @relation(fields: [productId], references: [id])
+  category       Category? @relation(fields: [categoryId], references: [id])
+
+  @@index([insightType])
+  @@index([severity])
+  @@index([productId])
+  @@index([isRead])
+  @@index([validFrom, validUntil])
+  @@map("forecast_insights")
+}
