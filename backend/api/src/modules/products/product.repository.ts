@@ -1,5 +1,4 @@
 import { prisma } from '@/shared/database/client.js';
-import { Product, Prisma } from '@prisma/client';
 import { buildCursorPagination } from '@/shared/utils/pagination.js';
 import { buildProductFilters, ProductFilters } from '@/shared/utils/filtering.js';
 import { buildProductSort, SortParams } from '@/shared/utils/sorting.js';

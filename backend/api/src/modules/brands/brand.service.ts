@@ -24,7 +24,7 @@ export class BrandService {
 
     // Transform response to include product count
     const response = {
-      data: brands.map((brand) => ({
+      data: brands.map((brand: any) => ({
         id: brand.id,
         name: brand.name,
         slug: brand.slug,

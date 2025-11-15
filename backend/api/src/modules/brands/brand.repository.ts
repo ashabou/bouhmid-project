@@ -1,12 +1,11 @@
 import { prisma } from '@/shared/database/client.js';
-import { Prisma } from '@prisma/client';
 
 export class BrandRepository {
   /**
    * Find all brands with optional filters
    */
   async findAll(isActive?: boolean) {
-    const where: Prisma.BrandWhereInput = {};
+    const where: any = {};
 
     if (isActive !== undefined) {
       where.isActive = isActive;

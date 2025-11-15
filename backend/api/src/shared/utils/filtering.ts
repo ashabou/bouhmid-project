@@ -1,5 +1,3 @@
-import { Prisma } from '@prisma/client';
-
 /**
  * Product filter parameters
  */
@@ -16,8 +14,8 @@ export interface ProductFilters {
 /**
  * Build Prisma where clause for product filtering
  */
-export function buildProductFilters(filters: ProductFilters): Prisma.ProductWhereInput {
-  const where: Prisma.ProductWhereInput = {};
+export function buildProductFilters(filters: ProductFilters): any {
+  const where: any = {};
 
   // Brand filter
   if (filters.brandId) {

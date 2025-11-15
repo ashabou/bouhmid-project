@@ -19,8 +19,8 @@ export const listProductsSchema = z.object({
   categoryId: z.coerce.number().int().positive().optional(),
   minPrice: z.coerce.number().positive().optional(),
   maxPrice: z.coerce.number().positive().optional(),
-  inStock: z.enum(['true', 'false']).transform(val => val === 'true').optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'DISCONTINUED', 'OUT_OF_STOCK']).optional(),
+  inStock: z.enum(['true', 'false']).optional().transform(val => val === 'true'),
+  status: z.string().optional(),
   search: z.string().min(1).max(100).optional(),
 });
 

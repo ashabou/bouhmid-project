@@ -1,5 +1,3 @@
-import { Prisma } from '@prisma/client';
-
 /**
  * Sort parameters
  */
@@ -24,7 +22,7 @@ type AllowedProductSortField = typeof ALLOWED_PRODUCT_SORT_FIELDS[number];
 /**
  * Build Prisma orderBy clause for product sorting
  */
-export function buildProductSort(params: SortParams): Prisma.ProductOrderByWithRelationInput {
+export function buildProductSort(params: SortParams): any {
   const { sortBy = 'createdAt', sortOrder = 'desc' } = params;
 
   // Validate sort field
