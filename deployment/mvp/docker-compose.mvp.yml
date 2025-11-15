@@ -1,0 +1,57 @@
+# MVP Docker Compose - Minimal Configuration
+# Only essential services for local development
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database (use Supabase in production)
+  postgres:
+    image: postgres:15-alpine
+    container_name: bouhmid-db-mvp
+    environment:
+      POSTGRES_DB: bouhmid
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_mvp:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Main API Service
+  api:
+    build:
+      context: ../../backend/api
+      dockerfile: Dockerfile
+    container_name: bouhmid-api-mvp
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bouhmid
+      JWT_SECRET: dev-jwt-secret-min-32-characters-long
+      JWT_REFRESH_SECRET: dev-refresh-secret-min-32-characters
+      CORS_ORIGIN: http://localhost:5173
+      FRONTEND_URL: http://localhost:5173
+      LOG_LEVEL: debug
+      # Redis disabled for MVP
+      REDIS_ENABLED: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../../backend/api/src:/app/src
+      - ../../backend/api/prisma:/app/prisma
+    command: npm run dev
+
+volumes:
+  postgres_data_mvp:
+    driver: local
+
+# NOTE: No Redis, No Celery, No Agents, No Monitoring Stack
+# This is the absolute minimum for local development
