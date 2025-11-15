@@ -1,0 +1,285 @@
+name: CD - Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/shabou
+
+jobs:
+  # ========================================
+  # Build and Push Docker Images
+  # ========================================
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service:
+          - name: api
+            context: backend/api
+            dockerfile: backend/api/Dockerfile
+          - name: prospector
+            context: backend/agents/prospector
+            dockerfile: backend/agents/prospector/Dockerfile
+          - name: orion
+            context: backend/agents/orion
+            dockerfile: backend/agents/orion/Dockerfile
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service.name }}
+          subject-digest: ${{ steps.meta.outputs.digest }}
+          push-to-registry: true
+
+  # ========================================
+  # Deploy to Staging
+  # ========================================
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging-api.shabouautopieces.tn
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+
+      - name: Add known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging server
+        env:
+          HOST: ${{ secrets.STAGING_HOST }}
+          USER: ${{ secrets.STAGING_USER }}
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_PREFIX: ${{ env.IMAGE_PREFIX }}
+        run: |
+          ssh $USER@$HOST << 'ENDSSH'
+            cd /opt/shabou-autopieces
+
+            # Pull latest code
+            git pull origin main
+
+            # Log in to GitHub Container Registry
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+            # Pull latest images
+            docker-compose pull
+
+            # Run database migrations
+            docker-compose run --rm api npm run db:migrate:deploy
+
+            # Restart services with zero downtime
+            docker-compose up -d --no-deps --build
+
+            # Clean up old images
+            docker image prune -af --filter "until=72h"
+          ENDSSH
+
+      - name: Health check
+        env:
+          STAGING_URL: https://staging-api.shabouautopieces.tn
+        run: |
+          sleep 30
+          curl -f $STAGING_URL/api/v1/health || exit 1
+
+      - name: Notify deployment status
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Staging deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+  # ========================================
+  # Deploy to Production
+  # ========================================
+  deploy-production:
+    name: Deploy to Production
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
+    environment:
+      name: production
+      url: https://api.shabouautopieces.tn
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+
+      - name: Add known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create backup
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          ssh $USER@$HOST << 'ENDSSH'
+            # Backup database
+            docker-compose exec -T postgres pg_dump -U postgres shabou_autopieces > /backups/pre-deploy-$(date +%Y%m%d-%H%M%S).sql
+          ENDSSH
+
+      - name: Deploy to production server
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          USER: ${{ secrets.PRODUCTION_USER }}
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_PREFIX: ${{ env.IMAGE_PREFIX }}
+        run: |
+          ssh $USER@$HOST << 'ENDSSH'
+            cd /opt/shabou-autopieces
+
+            # Pull latest code
+            git pull origin main
+
+            # Log in to GitHub Container Registry
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+            # Pull latest images
+            docker-compose -f docker-compose.yml pull
+
+            # Run database migrations
+            docker-compose run --rm api npm run db:migrate:deploy
+
+            # Rolling update with zero downtime
+            docker-compose up -d --no-deps --scale api=2 api
+            sleep 30
+            docker-compose up -d --no-deps --scale api=1 api
+
+            # Update other services
+            docker-compose up -d --no-deps prospector orion
+
+            # Clean up old images
+            docker image prune -af --filter "until=72h"
+          ENDSSH
+
+      - name: Health check
+        env:
+          PRODUCTION_URL: https://api.shabouautopieces.tn
+        run: |
+          sleep 30
+          curl -f $PRODUCTION_URL/api/v1/health || exit 1
+
+      - name: Smoke tests
+        env:
+          PRODUCTION_URL: https://api.shabouautopieces.tn
+        run: |
+          # Test critical endpoints
+          curl -f $PRODUCTION_URL/api/v1/products || exit 1
+          curl -f $PRODUCTION_URL/api/v1/brands || exit 1
+          curl -f $PRODUCTION_URL/api/v1/categories || exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          ssh $USER@$HOST << 'ENDSSH'
+            cd /opt/shabou-autopieces
+
+            # Restore from backup
+            LATEST_BACKUP=$(ls -t /backups/pre-deploy-*.sql | head -1)
+            docker-compose exec -T postgres psql -U postgres -d shabou_autopieces < $LATEST_BACKUP
+
+            # Roll back to previous images
+            docker-compose down
+            docker-compose up -d
+          ENDSSH
+
+      - name: Notify deployment status
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Production deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') && success()
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: false
