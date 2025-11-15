@@ -1,0 +1,298 @@
+version: '3.8'
+
+# ========================================
+# Shabou Auto Pièces - Production Docker Compose
+# ========================================
+
+services:
+  # ========================================
+  # PostgreSQL Database
+  # ========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: shabou_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-shabou_autopieces}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - shabou_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ========================================
+  # Redis Cache & Queue
+  # ========================================
+  redis:
+    image: redis:7-alpine
+    container_name: shabou_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - shabou_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ========================================
+  # Main API Service (Node.js/Fastify)
+  # ========================================
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      target: production
+    container_name: shabou_api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-shabou_autopieces}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - shabou_network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ========================================
+  # Prospector Agent (Python/FastAPI)
+  # Lead Generation & Web Scraping
+  # ========================================
+  prospector:
+    build:
+      context: ./agents/prospector
+      dockerfile: Dockerfile
+      target: production
+    container_name: shabou_prospector
+    restart: unless-stopped
+    environment:
+      PYTHON_ENV: ${PYTHON_ENV:-production}
+      PORT: 8001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-shabou_autopieces}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+    ports:
+      - "${PROSPECTOR_PORT:-8001}:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - shabou_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ========================================
+  # Prospector Celery Worker
+  # Background tasks for scraping
+  # ========================================
+  prospector_worker:
+    build:
+      context: ./agents/prospector
+      dockerfile: Dockerfile
+      target: production
+    container_name: shabou_prospector_worker
+    restart: unless-stopped
+    command: celery -A app.scheduler.celery_app worker --loglevel=info
+    environment:
+      PYTHON_ENV: ${PYTHON_ENV:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-shabou_autopieces}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - shabou_network
+
+  # ========================================
+  # Prospector Celery Beat
+  # Scheduled tasks (daily scraping)
+  # ========================================
+  prospector_beat:
+    build:
+      context: ./agents/prospector
+      dockerfile: Dockerfile
+      target: production
+    container_name: shabou_prospector_beat
+    restart: unless-stopped
+    command: celery -A app.scheduler.celery_app beat --loglevel=info
+    environment:
+      PYTHON_ENV: ${PYTHON_ENV:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-shabou_autopieces}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - shabou_network
+
+  # ========================================
+  # Orion Agent (Python/FastAPI)
+  # Demand Forecasting & ML
+  # ========================================
+  orion:
+    build:
+      context: ./agents/orion
+      dockerfile: Dockerfile
+      target: production
+    container_name: shabou_orion
+    restart: unless-stopped
+    environment:
+      PYTHON_ENV: ${PYTHON_ENV:-production}
+      PORT: 8002
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-shabou_autopieces}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+    ports:
+      - "${ORION_PORT:-8002}:8002"
+    volumes:
+      # Mount for ML models (persistent)
+      - orion_models:/app/models
+      # Mount for data (persistent)
+      - orion_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - shabou_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ========================================
+  # Orion Celery Worker
+  # Background tasks for forecasting
+  # ========================================
+  orion_worker:
+    build:
+      context: ./agents/orion
+      dockerfile: Dockerfile
+      target: production
+    container_name: shabou_orion_worker
+    restart: unless-stopped
+    command: celery -A app.scheduler.celery_app worker --loglevel=info
+    environment:
+      PYTHON_ENV: ${PYTHON_ENV:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-shabou_autopieces}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+    volumes:
+      # Share models with main Orion service
+      - orion_models:/app/models
+      - orion_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - shabou_network
+
+  # ========================================
+  # Orion Celery Beat
+  # Scheduled tasks (weekly forecasting)
+  # ========================================
+  orion_beat:
+    build:
+      context: ./agents/orion
+      dockerfile: Dockerfile
+      target: production
+    container_name: shabou_orion_beat
+    restart: unless-stopped
+    command: celery -A app.scheduler.celery_app beat --loglevel=info
+    environment:
+      PYTHON_ENV: ${PYTHON_ENV:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-shabou_autopieces}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - shabou_network
+
+# ========================================
+# Networks
+# ========================================
+networks:
+  shabou_network:
+    driver: bridge
+
+# ========================================
+# Volumes
+# ========================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  orion_models:
+    driver: local
+  orion_data:
+    driver: local

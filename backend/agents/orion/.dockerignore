@@ -1,0 +1,55 @@
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv
+env
+ENV
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+tests
+*.test.py
+
+# Development files
+.env
+.env.local
+.env.test
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Documentation
+README.md
+docs
+
+# CI/CD
+.github
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Logs
+*.log
+
+# Jupyter notebooks (if any)
+*.ipynb
+.ipynb_checkpoints
+
+# ML artifacts (exclude from image, mount as volume)
+models/*.pkl
+models/*.joblib
+data/*.csv

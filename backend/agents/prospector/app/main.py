@@ -46,11 +46,31 @@ async def startup_event():
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Port: {settings.PORT}")
 
+    # Initialize database connection
+    try:
+        from .models.database import engine
+        # Test database connection
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        logger.info("✅ Database connection established")
+    except Exception as e:
+        logger.error(f"❌ Failed to connect to database: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Run on application shutdown"""
+    """Run on application shutdown - cleanup resources"""
     logger.info(f"{settings.APP_NAME} shutting down...")
+
+    try:
+        # Close database connections
+        from .models.database import engine
+        engine.dispose()
+        logger.info("✅ Database connections closed")
+    except Exception as e:
+        logger.error(f"❌ Error closing database connections: {e}")
+
+    logger.info("✅ Shutdown complete")
 
 
 @app.get("/")
