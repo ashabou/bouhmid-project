@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from .config import settings
+from .routes import leads, scraping
 import logging
 
 # Configure logging
@@ -32,6 +33,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register routes
+app.include_router(leads.router)
+app.include_router(scraping.router)
 
 
 @app.on_event("startup")
@@ -66,24 +71,6 @@ async def health():
         "status": "healthy",
         "service": "prospector",
         "version": settings.VERSION
-    }
-
-
-@app.get("/api/v1/leads")
-async def list_leads():
-    """List all leads (placeholder)"""
-    # TODO: Implement lead listing from database
-    return {"data": [], "total": 0}
-
-
-@app.post("/api/v1/scrape/google-places")
-async def scrape_google_places():
-    """Scrape leads from Google Places API (placeholder)"""
-    # TODO: Implement Google Places scraping
-    return {
-        "success": True,
-        "message": "Scraping task queued",
-        "leads_found": 0
     }
 
 
