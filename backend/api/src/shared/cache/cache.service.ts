@@ -95,6 +95,13 @@ export class CacheService {
   }
 
   /**
+   * Alias for delete() - for convenience
+   */
+  async del(key: string): Promise<void> {
+    return this.delete(key);
+  }
+
+  /**
    * Invalidate cache by pattern
    * Supports wildcards (e.g., "products:*")
    */
@@ -118,6 +125,13 @@ export class CacheService {
     } catch (error) {
       logger.error('Cache invalidate error', { pattern, error });
     }
+  }
+
+  /**
+   * Alias for invalidate() - for convenience
+   */
+  async invalidatePattern(pattern: string): Promise<void> {
+    return this.invalidate(pattern);
   }
 
   /**
