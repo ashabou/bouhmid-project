@@ -33,7 +33,7 @@ export async function errorHandler(
       statusCode: 422,
       error: 'Validation Error',
       message: 'Invalid request data',
-      details: error.errors.map((err) => ({
+      details: error.issues.map((err: any) => ({
         path: err.path.join('.'),
         message: err.message,
       })),
