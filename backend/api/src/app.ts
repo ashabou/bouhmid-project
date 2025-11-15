@@ -12,8 +12,9 @@ import { jwtConfig } from './config/jwt.config.js';
 import { errorHandler } from './shared/errors/error.handler.js';
 import { logger } from './shared/logger/winston.config.js';
 
-// Import routes (will be created later)
-// import { healthRoutes } from './modules/health/health.routes.js';
+// Import routes
+import { productRoutes } from './modules/products/product.routes.js';
+import { brandRoutes } from './modules/brands/brand.routes.js';
 
 /**
  * Create and configure Fastify application
@@ -117,8 +118,8 @@ export async function createApp() {
   });
 
   // Register routes
-  // await app.register(healthRoutes);
-  // More routes will be registered here as we build them
+  await app.register(productRoutes, { prefix: appConfig.api.prefix });
+  await app.register(brandRoutes, { prefix: appConfig.api.prefix });
 
   return app;
 }
