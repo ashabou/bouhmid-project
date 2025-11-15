@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "build:types": "tsc --declaration --emitDeclarationOnly --outDir dist/types src/types/index.ts",
     "start": "node dist/server.js",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -35,6 +36,8 @@
     "@fastify/jwt": "^10.0.0",
     "@fastify/multipart": "^9.3.0",
     "@fastify/rate-limit": "^10.3.0",
+    "@fastify/swagger": "^9.3.0",
+    "@fastify/swagger-ui": "^5.3.0",
     "@prisma/client": "^6.19.0",
     "@types/jsonwebtoken": "^9.0.10",
     "bcrypt": "^6.0.0",

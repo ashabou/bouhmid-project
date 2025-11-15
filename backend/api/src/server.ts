@@ -23,6 +23,7 @@ async function start() {
     logger.info(`🚀 Server running on http://localhost:${appConfig.port}`);
     logger.info(`📚 Environment: ${appConfig.nodeEnv}`);
     logger.info(`🔍 Health check: http://localhost:${appConfig.port}/api/v1/health`);
+    logger.info(`📖 API Docs: http://localhost:${appConfig.port}/docs`);
   } catch (error) {
     logger.error('Failed to start server', { error });
     await cleanup();

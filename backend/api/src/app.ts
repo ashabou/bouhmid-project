@@ -4,10 +4,13 @@ import helmet from '@fastify/helmet';
 import compress from '@fastify/compress';
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 
 import { appConfig } from './config/app.config.js';
 import { corsConfig } from './config/cors.config.js';
 import { jwtConfig } from './config/jwt.config.js';
+import { swaggerOptions, swaggerUiOptions } from './config/swagger.config.js';
 import { errorHandler } from './shared/errors/error.handler.js';
 import { logger } from './shared/logger/winston.config.js';
 
@@ -63,6 +66,10 @@ export async function createApp() {
     parseOptions: {},
   });
 
+  // Swagger/OpenAPI documentation
+  await app.register(swagger, swaggerOptions);
+  await app.register(swaggerUi, swaggerUiOptions);
+
   // Rate limiting
   await app.register(rateLimit, {
     max: appConfig.rateLimit.max,
@@ -115,7 +122,14 @@ export async function createApp() {
       version: appConfig.api.version,
       environment: appConfig.nodeEnv,
       documentation: '/docs',
+      openapi: '/openapi.json',
     };
+  });
+
+  // OpenAPI spec endpoint (for frontend integration)
+  app.get('/openapi.json', async (_request, reply) => {
+    reply.header('Content-Type', 'application/json');
+    return app.swagger();
   });
 
   // Register routes
