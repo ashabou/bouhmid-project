@@ -91,6 +91,15 @@ celery_app.conf.beat_schedule = {
             "expires": 7200,
         },
     },
+
+    # Send weekly report (runs every Monday at 9 AM UTC)
+    "send-weekly-report": {
+        "task": "app.scheduler.tasks.send_weekly_report",
+        "schedule": crontab(hour=9, minute=0, day_of_week=1),  # Monday = 1
+        "options": {
+            "expires": 3600,
+        },
+    },
 }
 
 # Task routes (can route specific tasks to specific queues)
@@ -99,6 +108,7 @@ celery_app.conf.task_routes = {
     "app.scheduler.tasks.scrape_lead_websites": {"queue": "scraping"},
     "app.scheduler.tasks.batch_update_lead_scores": {"queue": "processing"},
     "app.scheduler.tasks.cleanup_old_data": {"queue": "maintenance"},
+    "app.scheduler.tasks.send_weekly_report": {"queue": "processing"},
 }
 
 logger.info("Celery app configured successfully")

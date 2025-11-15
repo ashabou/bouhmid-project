@@ -6,7 +6,8 @@ from .tasks import (
     daily_google_places_scrape,
     scrape_lead_websites,
     batch_update_lead_scores,
-    cleanup_old_data
+    cleanup_old_data,
+    send_weekly_report
 )
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "daily_google_places_scrape",
     "scrape_lead_websites",
     "batch_update_lead_scores",
-    "cleanup_old_data"
+    "cleanup_old_data",
+    "send_weekly_report"
 ]

@@ -445,3 +445,89 @@ def scrape_specific_location(
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat()
             }
+
+
+@celery_app.task(
+    bind=True,
+    base=DatabaseTask,
+    name="app.scheduler.tasks.send_weekly_report",
+    max_retries=3,
+    default_retry_delay=300,  # 5 minutes
+)
+def send_weekly_report(self) -> Dict[str, Any]:
+    """
+    Generate and send weekly report email
+
+    Generates comprehensive weekly report and emails it to configured recipients.
+    Runs weekly on Monday at 9:00 AM UTC.
+
+    Returns:
+        Summary of report generation and email sending
+    """
+    try:
+        from ..utils.report_generator import ReportGenerator
+        from ..utils.email_service import EmailService
+        from ..config import settings
+
+        logger.info("Starting weekly report generation")
+
+        # Generate report
+        report_generator = ReportGenerator()
+        report_data = report_generator.generate_weekly_report(self.db)
+
+        # Format as HTML
+        html_report = report_generator.format_report_as_html(report_data)
+
+        # Parse recipient emails
+        recipients = [
+            email.strip()
+            for email in settings.REPORT_RECIPIENTS.split(",")
+            if email.strip()
+        ]
+
+        if not recipients:
+            logger.warning("No report recipients configured")
+            return {
+                "success": False,
+                "error": "No recipients configured",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+        # Send email
+        email_service = EmailService()
+        email_sent = email_service.send_weekly_report(
+            to_emails=recipients,
+            html_report=html_report
+        )
+
+        result = {
+            "success": email_sent,
+            "timestamp": datetime.utcnow().isoformat(),
+            "recipients": recipients,
+            "report_summary": {
+                "total_leads": report_data["summary"]["total_leads"],
+                "new_leads_this_week": report_data["summary"]["new_leads_this_week"],
+                "new_products_this_week": report_data["summary"]["new_products_this_week"],
+            }
+        }
+
+        if email_sent:
+            logger.info(f"Weekly report sent successfully to {len(recipients)} recipients")
+        else:
+            logger.error("Failed to send weekly report email")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Fatal error in weekly report generation: {str(e)}", exc_info=True)
+
+        # Retry with exponential backoff
+        try:
+            raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
+        except self.MaxRetriesExceededError:
+            logger.error("Max retries exceeded for weekly report")
+            return {
+                "success": False,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
