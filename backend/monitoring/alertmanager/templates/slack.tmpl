@@ -1,0 +1,76 @@
+{{ define "slack.default.text" }}
+{{ if eq .Status "firing" }}
+*Firing Alerts ({{ len .Alerts.Firing }}):*
+
+{{ range .Alerts.Firing }}
+---
+*Alert:* {{ .Labels.alertname }}
+*Severity:* {{ .Labels.severity }}
+*Service:* {{ .Labels.service }}
+{{ if .Labels.instance }}*Instance:* {{ .Labels.instance }}{{ end }}
+
+*Summary:* {{ .Annotations.summary }}
+*Description:* {{ .Annotations.description }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+{{ end }}
+{{ else }}
+*Resolved Alerts ({{ len .Alerts.Resolved }}):*
+
+{{ range .Alerts.Resolved }}
+---
+*Alert:* {{ .Labels.alertname }}
+*Service:* {{ .Labels.service }}
+
+*Summary:* {{ .Annotations.summary }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05 MST" }}
+*Duration:* {{ .EndsAt.Sub .StartsAt }}
+{{ end }}
+{{ end }}
+{{ end }}
+
+{{ define "slack.critical.text" }}
+{{ if eq .Status "firing" }}
+🚨 *CRITICAL ALERT - IMMEDIATE ACTION REQUIRED* 🚨
+
+{{ range .Alerts.Firing }}
+---
+*Alert:* {{ .Labels.alertname }}
+*Severity:* 🔥 CRITICAL
+*Service:* {{ .Labels.service }}
+{{ if .Labels.instance }}*Instance:* {{ .Labels.instance }}{{ end }}
+
+*Summary:* {{ .Annotations.summary }}
+*Description:* {{ .Annotations.description }}
+
+{{ if .Annotations.runbook_url }}
+📖 *Runbook:* {{ .Annotations.runbook_url }}
+{{ end }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+*Duration:* {{ since .StartsAt }}
+
+⚠️ *This requires immediate attention from the on-call team*
+{{ end }}
+{{ else }}
+✅ *CRITICAL ALERT RESOLVED*
+
+{{ range .Alerts.Resolved }}
+---
+*Alert:* {{ .Labels.alertname }}
+*Service:* {{ .Labels.service }}
+
+*Summary:* {{ .Annotations.summary }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05 MST" }}
+*Duration:* {{ .EndsAt.Sub .StartsAt }}
+{{ end }}
+{{ end }}
+{{ end }}
+
+{{ define "slack.title" }}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.alertname }}
+{{ end }}
