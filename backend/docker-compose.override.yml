@@ -1,0 +1,172 @@
+version: '3.8'
+
+# ========================================
+# Docker Compose Override for Development
+# ========================================
+# This file is automatically merged with docker-compose.yml
+# when running `docker-compose up` without specifying -f flag
+#
+# Usage:
+#   docker-compose up           # Uses docker-compose.yml + docker-compose.override.yml
+#   docker-compose -f docker-compose.yml up  # Production mode (no override)
+# ========================================
+
+services:
+  # ========================================
+  # API - Development Overrides
+  # ========================================
+  api:
+    build:
+      target: dependencies  # Use dependencies stage for faster rebuilds
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    volumes:
+      # Mount source code for hot reload
+      - ./api/src:/app/src:ro
+      - ./api/prisma:/app/prisma:ro
+      # Persist node_modules to avoid overwriting
+      - api_node_modules:/app/node_modules
+    command: npm run dev
+    ports:
+      # Expose debugger port
+      - "9229:9229"
+
+  # ========================================
+  # Prospector - Development Overrides
+  # ========================================
+  prospector:
+    build:
+      target: dependencies
+    environment:
+      PYTHON_ENV: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      # Mount source code for hot reload
+      - ./agents/prospector/app:/app/app:ro
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+
+  # ========================================
+  # Prospector Worker - Development Overrides
+  # ========================================
+  prospector_worker:
+    build:
+      target: dependencies
+    environment:
+      PYTHON_ENV: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./agents/prospector/app:/app/app:ro
+    command: celery -A app.scheduler.celery_app worker --loglevel=debug
+
+  # ========================================
+  # Prospector Beat - Development Overrides
+  # ========================================
+  prospector_beat:
+    build:
+      target: dependencies
+    environment:
+      PYTHON_ENV: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./agents/prospector/app:/app/app:ro
+
+  # ========================================
+  # Orion - Development Overrides
+  # ========================================
+  orion:
+    build:
+      target: dependencies
+    environment:
+      PYTHON_ENV: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      # Mount source code for hot reload
+      - ./agents/orion/app:/app/app:ro
+      # Mount local models directory
+      - ./agents/orion/models:/app/models
+      - ./agents/orion/data:/app/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+
+  # ========================================
+  # Orion Worker - Development Overrides
+  # ========================================
+  orion_worker:
+    build:
+      target: dependencies
+    environment:
+      PYTHON_ENV: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./agents/orion/app:/app/app:ro
+      - ./agents/orion/models:/app/models
+      - ./agents/orion/data:/app/data
+    command: celery -A app.scheduler.celery_app worker --loglevel=debug
+
+  # ========================================
+  # Orion Beat - Development Overrides
+  # ========================================
+  orion_beat:
+    build:
+      target: dependencies
+    environment:
+      PYTHON_ENV: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./agents/orion/app:/app/app:ro
+
+  # ========================================
+  # Database - Development Overrides
+  # ========================================
+  postgres:
+    # Expose PostgreSQL logs
+    command: postgres -c log_statement=all -c log_destination=stderr
+    environment:
+      POSTGRES_PASSWORD: postgres  # Simple password for dev
+
+  # ========================================
+  # Redis - Development Overrides
+  # ========================================
+  redis:
+    # No password in development
+    command: redis-server --appendonly yes
+
+  # ========================================
+  # Development Tools
+  # ========================================
+  # Adminer - Database Management UI
+  adminer:
+    image: adminer:latest
+    container_name: shabou_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    networks:
+      - shabou_network
+
+  # RedisInsight - Redis Management UI
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: shabou_redis_insight
+    restart: unless-stopped
+    ports:
+      - "8081:8001"
+    volumes:
+      - redis_insight_data:/db
+    depends_on:
+      - redis
+    networks:
+      - shabou_network
+
+# ========================================
+# Additional Volumes for Development
+# ========================================
+volumes:
+  api_node_modules:
+    driver: local
+  redis_insight_data:
+    driver: local

@@ -1,38 +1,111 @@
 version: '3.8'
 
+# ========================================
+# Shabou Auto Pièces - Development Environment
+# ========================================
+# This compose file provides infrastructure services only
+# Run the API and agents locally for development
+# ========================================
+
 services:
+  # ========================================
+  # PostgreSQL Database
+  # ========================================
   postgres:
     image: postgres:15-alpine
-    container_name: shabou_postgres
+    container_name: shabou_postgres_dev
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: shabou_autopieces
+      # Enable logging for development
+      POSTGRES_INITDB_ARGS: "-E UTF8"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Mount initialization scripts if needed
+      # - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - shabou_network_dev
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
+  # ========================================
+  # Redis Cache & Queue
+  # ========================================
   redis:
     image: redis:7-alpine
-    container_name: shabou_redis
+    container_name: shabou_redis_dev
     restart: unless-stopped
+    # No password for development
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - shabou_network_dev
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
+  # ========================================
+  # Adminer (Database Management UI)
+  # Optional: Comment out if not needed
+  # ========================================
+  adminer:
+    image: adminer:latest
+    container_name: shabou_adminer_dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    networks:
+      - shabou_network_dev
+
+  # ========================================
+  # RedisInsight (Redis Management UI)
+  # Optional: Comment out if not needed
+  # ========================================
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: shabou_redis_insight_dev
+    restart: unless-stopped
+    ports:
+      - "8081:8001"
+    volumes:
+      - redis_insight_data:/db
+    depends_on:
+      - redis
+    networks:
+      - shabou_network_dev
+
+# ========================================
+# Networks
+# ========================================
+networks:
+  shabou_network_dev:
+    driver: bridge
+
+# ========================================
+# Volumes
+# ========================================
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  redis_insight_data:
+    driver: local

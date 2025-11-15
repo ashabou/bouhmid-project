@@ -27,14 +27,30 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info(f"Starting {settings.APP_NAME} v{settings.VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Port: {settings.PORT}")
 
     # Initialize database
-    init_db()
+    try:
+        init_db()
+        logger.info("✅ Database initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database: {e}")
+        raise
 
     yield
 
-    # Shutdown
-    logger.info(f"Shutting down {settings.APP_NAME}")
+    # Shutdown - cleanup resources
+    logger.info(f"Shutting down {settings.APP_NAME}...")
+
+    try:
+        # Close database connections
+        from .models.database import engine
+        engine.dispose()
+        logger.info("✅ Database connections closed")
+    except Exception as e:
+        logger.error(f"❌ Error closing database connections: {e}")
+
+    logger.info("✅ Shutdown complete")
 
 
 # Create FastAPI app
