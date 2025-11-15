@@ -19,6 +19,7 @@ import { searchRoutes } from './modules/search/search.routes.js';
 import { authRoutes } from './modules/admin/auth/auth.routes.js';
 import { adminProductRoutes } from './modules/admin/products/admin-product.routes.js';
 import { adminBrandRoutes } from './modules/admin/brands/admin-brand.routes.js';
+import { adminCategoryRoutes } from './modules/admin/categories/admin-category.routes.js';
 
 /**
  * Create and configure Fastify application
@@ -122,6 +123,7 @@ export async function createApp() {
   await app.register(authRoutes, { prefix: appConfig.api.prefix });
   await app.register(adminProductRoutes, { prefix: appConfig.api.prefix });
   await app.register(adminBrandRoutes, { prefix: appConfig.api.prefix });
+  await app.register(adminCategoryRoutes, { prefix: appConfig.api.prefix });
 
   return app;
 }
