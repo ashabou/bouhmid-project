@@ -47,7 +47,7 @@ export const createProductSchema = z.object({
   brandId: z.number().int().positive().optional(),
   categoryId: z.number().int().positive(),
   description: z.string().optional(),
-  specifications: z.record(z.any()).optional(),
+  specifications: z.record(z.string(), z.any()).optional(),
   currentPrice: z.number().positive(),
   originalPrice: z.number().positive().optional(),
   currency: z.string().length(3).default('TND'),
@@ -58,7 +58,7 @@ export const createProductSchema = z.object({
   metaTitle: z.string().max(255).optional(),
   metaDescription: z.string().max(500).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'DISCONTINUED', 'OUT_OF_STOCK']).default('ACTIVE'),
-  compatibleVehicles: z.record(z.any()).optional(),
+  compatibleVehicles: z.record(z.string(), z.any()).optional(),
   partNumber: z.string().max(100).optional(),
 });
 
