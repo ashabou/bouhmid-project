@@ -4,7 +4,6 @@ import helmet from '@fastify/helmet';
 import compress from '@fastify/compress';
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
-import jwt from '@fastify/jwt';
 
 import { appConfig } from './config/app.config.js';
 import { corsConfig } from './config/cors.config.js';
@@ -17,6 +16,8 @@ import { productRoutes } from './modules/products/product.routes.js';
 import { brandRoutes } from './modules/brands/brand.routes.js';
 import { categoryRoutes } from './modules/categories/category.routes.js';
 import { searchRoutes } from './modules/search/search.routes.js';
+import { authRoutes } from './modules/admin/auth/auth.routes.js';
+import { adminProductRoutes } from './modules/admin/products/admin-product.routes.js';
 
 /**
  * Create and configure Fastify application
@@ -55,13 +56,6 @@ export async function createApp() {
   await app.register(cookie, {
     secret: jwtConfig.secret,
     parseOptions: {},
-  });
-
-  await app.register(jwt, {
-    secret: jwtConfig.secret,
-    sign: {
-      expiresIn: jwtConfig.expiresIn,
-    },
   });
 
   // Rate limiting
@@ -124,6 +118,8 @@ export async function createApp() {
   await app.register(brandRoutes, { prefix: appConfig.api.prefix });
   await app.register(categoryRoutes, { prefix: appConfig.api.prefix });
   await app.register(searchRoutes, { prefix: appConfig.api.prefix });
+  await app.register(authRoutes, { prefix: appConfig.api.prefix });
+  await app.register(adminProductRoutes, { prefix: appConfig.api.prefix });
 
   return app;
 }
