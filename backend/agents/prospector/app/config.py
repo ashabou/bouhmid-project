@@ -55,6 +55,19 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
+    # Email/SMTP settings
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "localhost")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: Optional[str] = os.getenv("SMTP_USER")
+    SMTP_PASSWORD: Optional[str] = os.getenv("SMTP_PASSWORD")
+    SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    FROM_EMAIL: str = os.getenv("FROM_EMAIL", "prospector@shabou-autopieces.tn")
+    FROM_NAME: str = os.getenv("FROM_NAME", "Prospector Agent")
+    REPORT_RECIPIENTS: str = os.getenv(
+        "REPORT_RECIPIENTS",
+        "owner@shabou-autopieces.tn"
+    )  # Comma-separated email addresses
+
     class Config:
         env_file = ".env"
         case_sensitive = True

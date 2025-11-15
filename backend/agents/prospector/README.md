@@ -148,6 +148,20 @@ The following tasks run automatically on a schedule:
 - **Description**: Removes old rejected leads, low-score inactive leads, and orphaned products
 - **Retention**: 180 days for rejected leads, 90 days for low-score leads
 
+#### Weekly Report Generation
+- **Schedule**: Every Monday at 9:00 AM UTC
+- **Task**: `send_weekly_report`
+- **Description**: Generates comprehensive weekly report and emails to configured recipients
+- **Report Contents**:
+  - Summary statistics (total leads, new leads, average score, products)
+  - Top 10 highest-scoring leads
+  - Week-over-week trends
+  - Geographic distribution
+  - Source breakdown
+  - Score distribution
+- **Email Format**: HTML email with styled tables and charts
+- **Recipients**: Configured via `REPORT_RECIPIENTS` environment variable
+
 ### Manual Tasks
 
 You can trigger tasks manually via Python or the Celery CLI:
@@ -214,6 +228,16 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
 # Google Places API
 GOOGLE_PLACES_API_KEY=your_api_key_here
+
+# Email/SMTP (for weekly reports)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
+SMTP_USE_TLS=true
+FROM_EMAIL=prospector@shabou-autopieces.tn
+FROM_NAME=Prospector Agent
+REPORT_RECIPIENTS=owner@shabou-autopieces.tn,manager@shabou-autopieces.tn
 ```
 
 ## License
