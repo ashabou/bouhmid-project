@@ -1,7 +1,9 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { AdminProductService } from './admin-product.service.js';
+import { CSVImportService } from './csv-import.service.js';
 import { z } from 'zod';
 import { logger } from '@/shared/logger/winston.config.js';
+import { BadRequestError } from '@/shared/errors/app.error.js';
 
 // Validation schemas
 const createProductSchema = z.object({
@@ -67,7 +69,11 @@ const productIdSchema = z.object({
  * Handles HTTP requests for admin product management
  */
 export class AdminProductController {
-  constructor(private productService: AdminProductService) {}
+  private csvImportService: CSVImportService;
+
+  constructor(private productService: AdminProductService) {
+    this.csvImportService = new CSVImportService();
+  }
 
   /**
    * POST /api/v1/admin/products
@@ -216,6 +222,72 @@ export class AdminProductController {
       return reply.send(result);
     } catch (error) {
       logger.error('Failed to list products', { error });
+      throw error;
+    }
+  };
+
+  /**
+   * POST /api/v1/admin/products/import
+   * Import products from CSV file
+   */
+  importCSV = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      if (!request.user) {
+        return reply.code(401).send({
+          error: 'Unauthorized',
+          message: 'Authentication required',
+        });
+      }
+
+      // Get uploaded file
+      const data = await request.file();
+
+      if (!data) {
+        throw new BadRequestError('No file uploaded');
+      }
+
+      // Validate file type
+      const allowedMimeTypes = ['text/csv', 'application/csv', 'text/plain'];
+      if (!allowedMimeTypes.includes(data.mimetype)) {
+        throw new BadRequestError(
+          `Invalid file type. Expected CSV file, got ${data.mimetype}`
+        );
+      }
+
+      // Read file buffer
+      const fileBuffer = await data.toBuffer();
+
+      // Validate file size (max 10MB)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (fileBuffer.length > MAX_FILE_SIZE) {
+        throw new BadRequestError(
+          `File too large. Maximum size is 10MB, got ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB`
+        );
+      }
+
+      logger.info('CSV import started', {
+        userId: request.user.userId,
+        filename: data.filename,
+        size: fileBuffer.length,
+      });
+
+      // Import products
+      const result = await this.csvImportService.importProducts(
+        fileBuffer,
+        request.user.userId
+      );
+
+      // Invalidate product caches after successful import
+      if (result.imported > 0) {
+        const { cacheService } = await import('@/shared/cache/cache.service.js');
+        await cacheService.invalidatePattern('products:*');
+        await cacheService.invalidatePattern('search:*');
+        logger.info('Product caches invalidated after CSV import');
+      }
+
+      return reply.send(result);
+    } catch (error) {
+      logger.error('CSV import failed', { error });
       throw error;
     }
   };

@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import multipart from '@fastify/multipart';
 import { AdminProductController } from './admin-product.controller.js';
 import { AdminProductService } from './admin-product.service.js';
 import { AdminProductRepository } from './admin-product.repository.js';
@@ -9,6 +10,13 @@ import { requireAdmin } from '@/shared/auth/auth.middleware.js';
  * All routes require ADMIN role authentication
  */
 export async function adminProductRoutes(fastify: FastifyInstance) {
+  // Register multipart support for file uploads
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max file size
+    },
+  });
+
   const repository = new AdminProductRepository();
   const service = new AdminProductService(repository);
   const controller = new AdminProductController(service);
@@ -68,5 +76,15 @@ export async function adminProductRoutes(fastify: FastifyInstance) {
   fastify.delete('/admin/products/:id/hard', {
     ...adminAuthHook,
     handler: controller.hardDelete,
+  });
+
+  /**
+   * POST /api/v1/admin/products/import
+   * Import products from CSV file
+   * Expects multipart/form-data with file field
+   */
+  fastify.post('/admin/products/import', {
+    ...adminAuthHook,
+    handler: controller.importCSV,
   });
 }
