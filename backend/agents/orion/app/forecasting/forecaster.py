@@ -14,6 +14,8 @@ from ..models import Forecast, SalesHistory
 from ..models.schemas import ForecastCreate
 from .feature_engineering import FeatureEngineer
 from .sarima_model import SARIMAModel
+from .prophet_model import ProphetModel
+from .ensemble_model import EnsembleModel
 from ..config import settings
 
 logger = logging.getLogger(__name__)
@@ -141,10 +143,108 @@ class Forecaster:
                     'model_info': model.get_model_info()
                 }
 
+            elif model_name == "Prophet":
+                model = ProphetModel()
+                training_result = model.train(train_df, target_col='quantity_sold')
+
+                if not training_result['success']:
+                    return {
+                        'success': False,
+                        'error': training_result.get('error', 'Training failed'),
+                        'forecasts_created': 0
+                    }
+
+                # Step 4: Evaluate on validation set
+                eval_result = model.evaluate(val_df, target_col='quantity_sold')
+                self.logger.info(f"Model evaluation: MAPE={eval_result['metrics']['mape']:.2f}%")
+
+                # Step 5: Generate forecast
+                forecast_result = model.predict(
+                    steps=forecast_horizon_days,
+                    confidence_level=settings.CONFIDENCE_LEVEL
+                )
+
+                if not forecast_result['success']:
+                    return {
+                        'success': False,
+                        'error': forecast_result.get('error', 'Prediction failed'),
+                        'forecasts_created': 0
+                    }
+
+                # Step 6: Store forecasts in database
+                forecasts_created = self._store_forecasts(
+                    forecasts=forecast_result['forecasts'],
+                    product_id=product_id,
+                    sku=sku,
+                    model_name=model_name,
+                    model_version="1.0",
+                    training_result=training_result,
+                    db=db
+                )
+
+                return {
+                    'success': True,
+                    'forecasts_created': forecasts_created,
+                    'model_type': model_name,
+                    'forecast_horizon_days': forecast_horizon_days,
+                    'training_metrics': training_result['metrics'],
+                    'validation_metrics': eval_result['metrics'],
+                    'model_info': model.get_model_info()
+                }
+
+            elif model_name == "Ensemble":
+                model = EnsembleModel(auto_weight=True)
+                training_result = model.train(df, target_col='quantity_sold', validation_split=0.2)
+
+                if not training_result['success']:
+                    return {
+                        'success': False,
+                        'error': training_result.get('error', 'Training failed'),
+                        'forecasts_created': 0
+                    }
+
+                # Step 4: Evaluate on validation set
+                eval_result = model.evaluate(val_df, target_col='quantity_sold')
+                self.logger.info(f"Model evaluation: MAPE={eval_result['metrics']['mape']:.2f}%")
+
+                # Step 5: Generate forecast
+                forecast_result = model.predict(
+                    steps=forecast_horizon_days,
+                    confidence_level=settings.CONFIDENCE_LEVEL
+                )
+
+                if not forecast_result['success']:
+                    return {
+                        'success': False,
+                        'error': forecast_result.get('error', 'Prediction failed'),
+                        'forecasts_created': 0
+                    }
+
+                # Step 6: Store forecasts in database
+                forecasts_created = self._store_forecasts(
+                    forecasts=forecast_result['forecasts'],
+                    product_id=product_id,
+                    sku=sku,
+                    model_name=model_name,
+                    model_version="1.0",
+                    training_result=training_result,
+                    db=db
+                )
+
+                return {
+                    'success': True,
+                    'forecasts_created': forecasts_created,
+                    'model_type': model_name,
+                    'forecast_horizon_days': forecast_horizon_days,
+                    'training_metrics': training_result.get('metrics', {}),
+                    'validation_metrics': eval_result['metrics'],
+                    'model_info': model.get_model_info()
+                }
+
             else:
                 return {
                     'success': False,
-                    'error': f'Model {model_name} not yet implemented',
+                    'error': f'Model {model_name} not supported. Choose from: SARIMA, Prophet, Ensemble',
                     'forecasts_created': 0
                 }
 
