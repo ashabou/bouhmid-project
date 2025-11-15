@@ -1,0 +1,330 @@
+name: CI - Test & Lint
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ========================================
+  # API Tests (Node.js/TypeScript)
+  # ========================================
+  test-api:
+    name: Test API (Node.js)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shabou_autopieces_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/api/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend/api
+        run: npm ci
+
+      - name: Generate Prisma Client
+        working-directory: backend/api
+        run: npx prisma generate
+
+      - name: Run database migrations
+        working-directory: backend/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shabou_autopieces_test
+        run: npx prisma migrate deploy
+
+      - name: Run linter
+        working-directory: backend/api
+        run: npm run lint
+
+      - name: Run type checking
+        working-directory: backend/api
+        run: npx tsc --noEmit
+
+      - name: Run unit tests
+        working-directory: backend/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shabou_autopieces_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_SECRET: test_jwt_secret_min_32_characters_long
+          JWT_REFRESH_SECRET: test_jwt_refresh_secret_min_32_chars
+          NODE_ENV: test
+        run: npm test -- --coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: backend/api/coverage/lcov.info
+          flags: api
+          name: api-coverage
+
+  # ========================================
+  # Prospector Agent Tests (Python)
+  # ========================================
+  test-prospector:
+    name: Test Prospector Agent (Python)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: prospector_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend/agents/prospector/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend/agents/prospector
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Run linter (flake8)
+        working-directory: backend/agents/prospector
+        run: |
+          pip install flake8
+          flake8 app --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 app --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run type checking (mypy)
+        working-directory: backend/agents/prospector
+        continue-on-error: true
+        run: |
+          pip install mypy
+          mypy app --ignore-missing-imports
+
+      - name: Run tests
+        working-directory: backend/agents/prospector
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/prospector_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          PYTHON_ENV: test
+        run: |
+          pip install pytest pytest-cov pytest-asyncio
+          pytest --cov=app --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: backend/agents/prospector/coverage.xml
+          flags: prospector
+          name: prospector-coverage
+
+  # ========================================
+  # Orion Agent Tests (Python)
+  # ========================================
+  test-orion:
+    name: Test Orion Agent (Python)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: orion_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend/agents/orion/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend/agents/orion
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run linter (flake8)
+        working-directory: backend/agents/orion
+        run: |
+          pip install flake8
+          flake8 app --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 app --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run type checking (mypy)
+        working-directory: backend/agents/orion
+        continue-on-error: true
+        run: |
+          pip install mypy
+          mypy app --ignore-missing-imports
+
+      - name: Run tests
+        working-directory: backend/agents/orion
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orion_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          PYTHON_ENV: test
+        run: pytest --cov=app --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: backend/agents/orion/coverage.xml
+          flags: orion
+          name: orion-coverage
+
+  # ========================================
+  # Security Scanning
+  # ========================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'backend'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run npm audit (API)
+        working-directory: backend/api
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  # ========================================
+  # Build Check (verify Docker builds work)
+  # ========================================
+  build-check:
+    name: Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API Docker image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: backend/api
+          file: backend/api/Dockerfile
+          push: false
+          tags: shabou-api:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Prospector Docker image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: backend/agents/prospector
+          file: backend/agents/prospector/Dockerfile
+          push: false
+          tags: shabou-prospector:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Orion Docker image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: backend/agents/orion
+          file: backend/agents/orion/Dockerfile
+          push: false
+          tags: shabou-orion:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
