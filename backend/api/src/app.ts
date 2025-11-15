@@ -19,6 +19,10 @@ import { searchRoutes } from './modules/search/search.routes.js';
 import { authRoutes } from './modules/admin/auth/auth.routes.js';
 import { adminProductRoutes } from './modules/admin/products/admin-product.routes.js';
 import { adminBrandRoutes } from './modules/admin/brands/admin-brand.routes.js';
+import { adminCategoryRoutes } from './modules/admin/categories/admin-category.routes.js';
+import { priceHistoryRoutes } from './modules/admin/price-history/price-history.routes.js';
+import { dashboardRoutes } from './modules/admin/dashboard/dashboard.routes.js';
+import { leadRoutes } from './modules/admin/leads/lead.routes.js';
 
 /**
  * Create and configure Fastify application
@@ -122,6 +126,10 @@ export async function createApp() {
   await app.register(authRoutes, { prefix: appConfig.api.prefix });
   await app.register(adminProductRoutes, { prefix: appConfig.api.prefix });
   await app.register(adminBrandRoutes, { prefix: appConfig.api.prefix });
+  await app.register(adminCategoryRoutes, { prefix: appConfig.api.prefix });
+  await app.register(priceHistoryRoutes, { prefix: appConfig.api.prefix });
+  await app.register(dashboardRoutes, { prefix: appConfig.api.prefix });
+  await app.register(leadRoutes, { prefix: appConfig.api.prefix });
 
   return app;
 }
