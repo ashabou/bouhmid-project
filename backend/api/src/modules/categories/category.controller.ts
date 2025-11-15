@@ -30,7 +30,7 @@ export class CategoryController {
    * Get category tree (hierarchical)
    * GET /api/v1/categories/tree
    */
-  getTree = async (request: FastifyRequest, reply: FastifyReply) => {
+  getTree = async (_request: FastifyRequest, reply: FastifyReply) => {
     const result = await this.categoryService.getTree();
 
     return reply.send(result);

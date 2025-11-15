@@ -179,7 +179,7 @@ export class SearchService {
     });
 
     const response = {
-      data: products.map((p) => ({
+      data: products.map((p: any) => ({
         name: p.name,
         slug: p.slug,
         sku: p.sku,
@@ -255,8 +255,8 @@ export class SearchService {
         select: { id: true, name: true, slug: true },
       });
 
-      brands = brands.map((b) => {
-        const detail = brandDetails.find((d) => d.id === b.brandId);
+      brands = brands.map((b: any) => {
+        const detail = brandDetails.find((d: any) => d.id === b.brandId);
         return {
           id: b.brandId,
           name: detail?.name,
@@ -284,8 +284,8 @@ export class SearchService {
         select: { id: true, name: true, slug: true },
       });
 
-      categories = categories.map((c) => {
-        const detail = categoryDetails.find((d) => d.id === c.categoryId);
+      categories = categories.map((c: any) => {
+        const detail = categoryDetails.find((d: any) => d.id === c.categoryId);
         return {
           id: c.categoryId,
           name: detail?.name,
