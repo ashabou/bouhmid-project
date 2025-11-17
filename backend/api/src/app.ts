@@ -19,6 +19,7 @@ import { productRoutes } from './modules/products/product.routes.js';
 import { brandRoutes } from './modules/brands/brand.routes.js';
 import { categoryRoutes } from './modules/categories/category.routes.js';
 import { searchRoutes } from './modules/search/search.routes.js';
+import { orderRoutes, adminOrderRoutes } from './modules/orders/order.routes.js';
 import { authRoutes } from './modules/admin/auth/auth.routes.js';
 import { adminProductRoutes } from './modules/admin/products/admin-product.routes.js';
 import { adminBrandRoutes } from './modules/admin/brands/admin-brand.routes.js';
@@ -137,6 +138,7 @@ export async function createApp() {
   await app.register(brandRoutes, { prefix: appConfig.api.prefix });
   await app.register(categoryRoutes, { prefix: appConfig.api.prefix });
   await app.register(searchRoutes, { prefix: appConfig.api.prefix });
+  await app.register(orderRoutes, { prefix: appConfig.api.prefix });
   await app.register(authRoutes, { prefix: appConfig.api.prefix });
   await app.register(adminProductRoutes, { prefix: appConfig.api.prefix });
   await app.register(adminBrandRoutes, { prefix: appConfig.api.prefix });
@@ -144,6 +146,7 @@ export async function createApp() {
   await app.register(priceHistoryRoutes, { prefix: appConfig.api.prefix });
   await app.register(dashboardRoutes, { prefix: appConfig.api.prefix });
   await app.register(leadRoutes, { prefix: appConfig.api.prefix });
+  await app.register(adminOrderRoutes, { prefix: `${appConfig.api.prefix}/admin` });
 
   return app;
 }

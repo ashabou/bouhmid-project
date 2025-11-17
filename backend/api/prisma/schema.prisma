@@ -129,6 +129,7 @@ model Product {
   // Pricing
   currentPrice        Decimal        @map("current_price") @db.Decimal(10, 2)
   originalPrice       Decimal?       @map("original_price") @db.Decimal(10, 2)
+  costPrice           Decimal?       @map("cost_price") @db.Decimal(10, 2)
   currency            String         @default("TND") @db.VarChar(3)
 
   // Inventory
@@ -163,6 +164,7 @@ model Product {
   priceHistory        PriceHistory[]
   forecasts           Forecast[]
   forecastInsights    ForecastInsight[]
+  orderItems          OrderItem[]
 
   @@index([brandId])
   @@index([categoryId])
@@ -388,4 +390,149 @@ model ForecastInsight {
   @@index([isRead])
   @@index([validFrom, validUntil])
   @@map("forecast_insights")
+}
+
+// ============================================
+// ORDER & TRANSACTION TABLES
+// ============================================
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  BANK_TRANSFER
+  CREDIT_CARD
+  PAYPAL
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Order {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderNumber       String        @unique @map("order_number") @db.VarChar(50)
+
+  // Customer Info
+  customerName      String        @map("customer_name") @db.VarChar(255)
+  customerEmail     String?       @map("customer_email") @db.VarChar(255)
+  customerPhone     String        @map("customer_phone") @db.VarChar(50)
+
+  // Delivery Address
+  deliveryAddress   String        @map("delivery_address") @db.Text
+  deliveryCity      String        @map("delivery_city") @db.VarChar(100)
+  deliveryRegion    String?       @map("delivery_region") @db.VarChar(100)
+  postalCode        String?       @map("postal_code") @db.VarChar(20)
+  deliveryNotes     String?       @map("delivery_notes") @db.Text
+
+  // Order Totals
+  subtotal          Decimal       @db.Decimal(10, 2)
+  shippingCost      Decimal       @default(0) @map("shipping_cost") @db.Decimal(10, 2)
+  taxAmount         Decimal       @default(0) @map("tax_amount") @db.Decimal(10, 2)
+  discountAmount    Decimal       @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  totalAmount       Decimal       @map("total_amount") @db.Decimal(10, 2)
+  currency          String        @default("TND") @db.VarChar(3)
+
+  // Payment
+  paymentMethod     PaymentMethod @map("payment_method")
+  paymentStatus     PaymentStatus @default(PENDING) @map("payment_status")
+  paidAt            DateTime?     @map("paid_at") @db.Timestamptz
+
+  // Order Status
+  status            OrderStatus   @default(PENDING)
+  confirmedAt       DateTime?     @map("confirmed_at") @db.Timestamptz
+  shippedAt         DateTime?     @map("shipped_at") @db.Timestamptz
+  deliveredAt       DateTime?     @map("delivered_at") @db.Timestamptz
+  cancelledAt       DateTime?     @map("cancelled_at") @db.Timestamptz
+  cancellationReason String?      @map("cancellation_reason") @db.Text
+
+  // Metadata
+  ipAddress         String?       @map("ip_address") @db.VarChar(50)
+  userAgent         String?       @map("user_agent") @db.Text
+
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  items             OrderItem[]
+
+  @@index([orderNumber])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([customerPhone])
+  @@index([customerEmail])
+  @@index([createdAt(sort: Desc)])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId           String   @map("order_id") @db.Uuid
+  productId         String   @map("product_id") @db.Uuid
+
+  // Product Snapshot (at time of order)
+  sku               String   @db.VarChar(100)
+  productName       String   @map("product_name") @db.VarChar(500)
+  productImage      String?  @map("product_image") @db.VarChar(500)
+
+  // Pricing
+  unitPrice         Decimal  @map("unit_price") @db.Decimal(10, 2)
+  quantity          Int
+  subtotal          Decimal  @db.Decimal(10, 2)
+
+  // Metadata
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+// ============================================
+// ANALYTICS & TRACKING TABLES
+// ============================================
+
+model SearchQuery {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Query
+  queryText         String    @map("query_text") @db.VarChar(500)
+  queryType         String?   @map("query_type") @db.VarChar(50)
+
+  // Results
+  resultsCount      Int       @default(0) @map("results_count")
+  matchedProducts   Json?     @map("matched_products") @db.JsonB
+  confidenceScore   Decimal?  @map("confidence_score") @db.Decimal(3, 2)
+
+  // User Behavior
+  converted         Boolean   @default(false)
+  productClicked    String?   @map("product_clicked") @db.Uuid
+  timeToClick       Int?      @map("time_to_click")
+
+  // Metadata
+  sessionId         String?   @map("session_id") @db.VarChar(255)
+  ipAddress         String?   @map("ip_address") @db.VarChar(50)
+  userAgent         String?   @map("user_agent") @db.Text
+
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([queryText])
+  @@index([converted])
+  @@index([createdAt(sort: Desc)])
+  @@map("search_queries")
 }

@@ -3,16 +3,37 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, ShoppingCart } from "lucide-react";
 import { Product } from "@/data/products";
+import { useCart } from "@/hooks/use-cart";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProductCardProps {
   product: Product;
 }
 
 const ProductCard = ({ product }: ProductCardProps) => {
+  const { addItem } = useCart();
+  const { toast } = useToast();
+
   const handleWhatsApp = () => {
     const message = `Bonjour, je suis intéressé par ${product.name} (Réf: ${product.reference})`;
     const phoneNumber = "21612345678";
     window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
+  };
+
+  const handleAddToCart = () => {
+    addItem({
+      productId: product.id,
+      sku: product.reference,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+      brand: product.brand,
+    });
+
+    toast({
+      title: "Ajouté au panier",
+      description: `${product.name} a été ajouté à votre panier`,
+    });
   };
 
   return (
@@ -68,13 +89,14 @@ const ProductCard = ({ product }: ProductCardProps) => {
       </CardContent>
 
       <CardFooter className="p-4 pt-0 flex flex-col gap-2">
-        <Button 
-          variant="industrial" 
+        <Button
+          variant="industrial"
           className="w-full"
           disabled={!product.inStock}
+          onClick={handleAddToCart}
         >
           <ShoppingCart className="w-4 h-4 mr-2" />
-          {product.inStock ? "Commander" : "Non disponible"}
+          {product.inStock ? "Ajouter au panier" : "Non disponible"}
         </Button>
         <Button 
           variant="outline" 

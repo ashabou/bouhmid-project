@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Menu, X, Search, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CartDrawer } from "@/components/CartDrawer";
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -43,12 +44,18 @@ const Header = () => {
             ))}
           </nav>
 
-          {/* Contact Button */}
+          {/* Contact Button & Cart */}
           <div className="hidden md:flex items-center space-x-4">
             <a href="tel:+21612345678" className="flex items-center text-primary hover:text-primary/80 transition-colors">
               <Phone className="w-4 h-4 mr-2" />
               <span className="font-semibold">+216 12 345 678</span>
             </a>
+            <CartDrawer />
+          </div>
+
+          {/* Mobile: Cart only */}
+          <div className="flex md:hidden items-center space-x-2">
+            <CartDrawer />
           </div>
 
           {/* Mobile Menu Button */}
